@@ -4,10 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -22,14 +19,14 @@ public class Server {
     private static Set<ClientHandler> connectedClients = new HashSet<>();
 
 
+    private static Map<String, Integer> messageCount = new LinkedHashMap<>();
+
+
     public static void main(String[] args) {
         try {
 //            Scanner scanner = new Scanner(System.in);
 //            System.out.println("Enter Port: [Leave blank for default (10023)]");
             //TODO uncomment for port selection
-            //TODO disconnect without Socket closed Exception
-            //TODO "type help for command list"
-            //TODO "auch für die Serverkonsole braucht man einen Thread?"
 //            String temp = scanner.nextLine();
 //            if (!temp.isEmpty()) {
 //                server_port = Integer.parseInt(temp);
@@ -71,7 +68,6 @@ public class Server {
                     System.out.println("Shutting down now!");
                     sendServerMessage("Bye!");
                     for (ClientHandler connectedClient : connectedClients) {
-                        //TODO doesn't quite work
                         connectedClient.disconnect();
                     }
 
@@ -82,6 +78,8 @@ public class Server {
                         System.out.print(client.getUsername() + "; ");
                     }
                     System.out.println();
+                } else if (input.equals("stat")) {
+                    System.out.println(Arrays.toString(messageCount.entrySet().toArray()));
                 }
             }
 
@@ -121,13 +119,15 @@ public class Server {
             } else {
                 for (ClientHandler clientHandler1 : clients) {
                     if (clientHandler1 != sourceClient) {
-//                    clientHandler1.sendMessage("\r\n" + sourceClient.getUsername() + ": " + message, true);
                         clientHandler1.sendMessage(sourceClient.getUsername() + ": " + message, true);
+                    } else {
+                        messageCount.put(clientHandler1.getUsername(), messageCount.get(clientHandler1.getUsername()) + 1);
                     }
                 }
             }
         }
     }
+
 
     public static void sendJoinMessage(String message, ClientHandler source) {
         if (!message.isEmpty()) {
@@ -171,5 +171,13 @@ public class Server {
             return connectedClients.stream().map(ClientHandler::getUsername).collect(Collectors.toList());
         }
 
+    }
+
+    public static Map<String, Integer> getMessageCount() {
+        return messageCount;
+    }
+
+    public static void setMessageCount(Map<String, Integer> messageCount) {
+        Server.messageCount = messageCount;
     }
 }

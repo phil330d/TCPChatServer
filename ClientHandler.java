@@ -3,6 +3,12 @@ package ue08_tcp;
 import java.io.*;
 import java.net.Socket;
 import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class ClientHandler implements Comparable<ClientHandler> {
     public static final Charset CHARSET = Charset.forName("ISO-8859-1");
@@ -13,11 +19,18 @@ public class ClientHandler implements Comparable<ClientHandler> {
     private static final String STZ_DAVOR = new String(new byte[]{0x0b, 0x1b, '[', '1', 'A', 0x1b, '7', 0x1b, '[', '1', 'L', '\r'});
     private static final String STZ_DANACH = new String(new byte[]{0x1b, '8', 0x1b, '[', '1', 'B'});
     public static boolean closed = false;
+    public static final Pattern statPattern = Pattern.compile("stat((\\d)*([+-]))?");
 
     public ClientHandler(Socket cltSocket) {
         this.cltSocket = cltSocket;
 
         new Thread(this::handleClient).start();
+    }
+
+    //log
+    public ClientHandler(Socket cltSocket, String username) {
+        this.cltSocket = cltSocket;
+        this.username = username;
     }
 
     private void handleClient() {
@@ -36,8 +49,10 @@ public class ClientHandler implements Comparable<ClientHandler> {
                 }
             }
 
-            //TODO eigener Username wird auch als beigetreten gezeigt
-            //fixed
+            Map<String, Integer> tempMap = Server.getMessageCount();
+            tempMap.put(this.username, 0);
+            Server.setMessageCount(tempMap);
+
             Server.sendJoinMessage("\"" + this.getUsername() + "\" hat den Raum betreten.", this);
 
 
@@ -47,12 +62,39 @@ public class ClientHandler implements Comparable<ClientHandler> {
                 out.write(this.username + ">");
                 out.flush();
                 String temp = in.readLine();
+                Matcher matcher = statPattern.matcher(temp);
                 if (temp.equals("quit")) {
                     out.write("Bye!\n");
                     out.flush();
                     cltSocket.close();
                     Server.sendServerMessage("\"" + this.getUsername() + "\" hat den Raum verlassen.");
                     break;
+                } else if (matcher.matches()) {
+                    //TODO - not working
+                    if (matcher.group(1) != null) {
+                        if (matcher.group(3).equals("+")) {
+                            Map<String, Integer> sorted = Server.getMessageCount()
+                                    .entrySet().stream()
+                                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                                    .collect(Collectors.toMap(
+                                            Map.Entry::getKey, Map.Entry::getValue,
+                                            (e1, e2) -> e1, LinkedHashMap::new
+                                    ));
+                            out.write(Arrays.toString(Arrays.copyOfRange(sorted.entrySet().toArray(), 0, Integer.min(Integer.parseInt(matcher.group(2)), Server.getMessageCount().keySet().size()))) + "\n");
+                        } else if (matcher.group(3).equals("-")) {
+                            Map<String, Integer> sorted = Server.getMessageCount()
+                                    .entrySet().stream()
+                                    .sorted(Map.Entry.comparingByValue())
+                                    .collect(Collectors.toMap(
+                                            Map.Entry::getKey, Map.Entry::getValue,
+                                            (e1, e2) -> e1, LinkedHashMap::new
+                                    ));
+                            out.write(Arrays.toString(Arrays.copyOfRange(sorted.entrySet().toArray(), 0, Integer.min(Integer.parseInt(matcher.group(2)), Server.getMessageCount().keySet().size()))) + "\n");
+                        }
+                    } else {
+                        out.write(Arrays.toString(Server.getMessageCount().entrySet().toArray()) + "\n");
+                    }
+                    out.flush();
                 } else {
                     Server.sendMessageToAll(this, temp);
                 }
